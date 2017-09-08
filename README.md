@@ -3,6 +3,12 @@ Django Auth0 Auth
 
 *Django Auth0 Auth* allows you to authenticate through Auth0.
 
+NB this is a fork of: https://bitbucket.org/megaman821/django-auth0-auth
+because:
+* we couldn't get that to work without some changes.
+* we moved it to git because we had an issue with our paas buildpack installing from mercurial
+
+
 Installation
 ------------
 
