@@ -26,7 +26,7 @@ def get_callback_url(request):
 
 def get_login_url(domain=DOMAIN, scope=SCOPE, client_id=CLIENT_ID, redirect_uri=None, response_mode='form_post', state=None):
     param_dict = {
-        'response_type': 'token',
+        'response_type': 'code',  # "code" because it is a server-side app
         'response_mode': response_mode,
         'scope': scope,
         'client_id': client_id,
