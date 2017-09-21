@@ -1,7 +1,7 @@
-from .utils import (get_email_from_token, is_email_verified_from_token,
-                    get_login_url, get_logout_url, get_tokens,
-                    get_user_info)
+from hashlib import sha1
 from base64 import urlsafe_b64encode
+
+import requests
 from django.conf import settings
 try:
     from django.contrib.auth import get_user_model
@@ -10,7 +10,10 @@ except ImportError:
 
     def get_user_model(*args, **kwargs):
         return User
-from hashlib import sha1
+
+from .utils import (get_email_from_token, is_email_verified_from_token,
+                    get_login_url, get_logout_url, get_tokens,
+                    get_user_info, get_github_details)
 
 log = __import__('logging').getLogger('auth0_auth.backends')
 
@@ -66,7 +69,8 @@ class Auth0Backend(object):
             log.error('Multiple users with email {}'.format(email))
             return None
 
-        user.backend = '{}.{}'.format(self.__class__.__module__, self.__class__.__name__)
+        user.backend = '{}.{}' \
+            .format(self.__class__.__module__, self.__class__.__name__)
         return user
 
     def authenticate_code(self, code, request):
@@ -85,21 +89,38 @@ class Auth0Backend(object):
             log.error('User has not verified their Github email address')
             return None
 
+        # Get the github name from the id
+        # e.g. user_info['sub'] = 'github|12345'
+        if not user_info['sub'].startswith('github|'):
+            log.error('Expected a github id and didnt get one: %s',
+                      user_info['sub'])
+            return None
+        github_id = user_info['sub'].split('|')[-1]
+        try:
+            github_details = get_github_details(github_id)
+        except requests.RequestException as err:
+            log.error('Problem looking up user on github: %s', err)
+            return None
+        github_username = github_details['login']
+
         # Create user if necessary
-        users = self.User.objects.filter(email=email)
+        username_field = getattr(self.User, 'USERNAME_FIELD', 'username')
+        users = self.User.objects.filter(**{username_field: github_username})
         if len(users) == 0:
-            user = self.create_user(email)
+            user = self.create_user(github_username, email)
             if user is None:
                 return None
-            log.info('Creating user {}'.format(email))
+            log.info('Creating user {} {}'.format(github_username, email))
         elif len(users) == 1:
             user = users[0]
-            log.info('Existing user {}'.format(user))
+            log.info('Existing user {} {}'.format(github_username, user))
         else:
-            log.error('Multiple users with email {}'.format(email))
+            # should not happen
+            log.error('Multiple users with github {}'.format(github_username))
             return None
 
-        user.backend = '{}.{}'.format(self.__class__.__module__, self.__class__.__name__)
+        user.backend = '{}.{}' \
+            .format(self.__class__.__module__, self.__class__.__name__)
         return user
 
     def get_user(self, user_id):
@@ -109,11 +130,13 @@ class Auth0Backend(object):
         except self.User.DoesNotExist:
             return None
 
-    def create_user(self, email):
+    def create_user(self, github_username, email):
         if self.USER_CREATION:
             username_field = getattr(self.User, 'USERNAME_FIELD', 'username')
-            user_kwargs = {'email': email}
-            user_kwargs[username_field] = self.username_generator(email)
+            user_kwargs = {
+                'email': email,
+                username_field: github_username,
+                }
             return self.User.objects.create_user(**user_kwargs)
         else:
             return None

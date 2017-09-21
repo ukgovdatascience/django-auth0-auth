@@ -10,6 +10,7 @@ try:
     from urllib import urlencode
 except ImportError:
     from urllib.parse import urlencode
+import requests
 
 logger = __import__('logging').getLogger('auth0_auth.utils')
 
@@ -94,3 +95,21 @@ def get_user_info(access_token):
     user_info_str = auth0_users.userinfo(access_token)
     # e.g. '{"sub":"github|12345","email":"david.read@xyz.com","email_verified":true}''
     return json.loads(user_info_str)
+
+def get_github_details(github_id):
+    '''
+    e.g. 307612 ->
+    {
+      "login": "davidread",
+      "id": 307612,
+      "name": "David Read",
+      "company": null,
+      "email": null,   # you need to authenticate with github directly to have
+                       # possibility to see the email addresses
+      "created_at": "2010-06-17T11:14:31Z",
+      "updated_at": "2017-09-08T10:20:26Z"
+    }
+    May raise requests.RequestsException
+    '''
+    res = requests.get('https://api.github.com/user/{}'.format(github_id))
+    return res.json()
