@@ -9,11 +9,10 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.cache import never_cache
 import logging
 try:
-    from urllib import urlencode
     from urlparse import urlparse
 except ImportError:
     # py3
-    from urllib.parse import urlencode, urlparse
+    from urllib.parse import urlparse
 import uuid
 
 
@@ -26,6 +25,7 @@ def auth(request):
     redirect_uri = request.build_absolute_uri(reverse(callback))
     state = str(uuid.uuid4())
     request.session['state'] = state
+    request.session['redirect_uri'] = request.GET.get('redirect_uri')
     logger.info('auth view: session state - {}'.format(state))
     login_url = backend.login_url(
         redirect_uri=redirect_uri,
@@ -73,7 +73,12 @@ def callback(request):
 
 
 def get_login_success_url(request):
-    redirect_to = request.GET.get(REDIRECT_FIELD_NAME, '')
+    redirect_to = request.session.get('redirect_uri')
+    if redirect_to not in settings.LOGIN_REDIRECT_URL_ALLOWABLE_PARAMETERS:
+        # don't trust sessions data. don't allow an open redirect
+        redirect_to = None
+    if not redirect_to:
+        request.GET.get(REDIRECT_FIELD_NAME, '')
     netloc = urlparse(redirect_to)[1]
     if not redirect_to:
         redirect_to = settings.LOGIN_REDIRECT_URL
